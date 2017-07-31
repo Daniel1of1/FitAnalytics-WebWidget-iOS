@@ -175,7 +175,7 @@ Reconfigure the widget with a new product serial and/or widget options object.
 - (void)webWidgetDidBecomeReady:(FITAWebWidget *)widget;
 ```
 
-This method will be called when widget container inside the WebView has successfully loaded and is ready to accept commands.
+This method will be called when the widget container inside the WebView successfully loads and is ready to accept commands.
 
 &nbsp;
 
@@ -183,7 +183,7 @@ This method will be called when widget container inside the WebView has successf
 - (void)webWidgetInitialized:(FITAWebWidget *)widget;
 ```
 
-This method will be called when widget container inside the WebView has successfully loaded.
+This method will be called when the widget container inside the WebView successfully loads.
 
 &nbsp;
 
@@ -191,7 +191,7 @@ This method will be called when widget container inside the WebView has successf
 - (void)webWidgetDidFailLoading:(FITAWebWidget *)widget withError:(NSError *)error;
 ```
 
-This method will be called when widget inside the WebView has failed to load or initialize for some reason.
+This method will be called when the widget inside the WebView fails to load or initialize for some reason.
 
 &nbsp;
 
@@ -199,7 +199,7 @@ This method will be called when widget inside the WebView has failed to load or 
 - (void)webWidgetDidLoadProduct:(FITAWebWidget *)widget productId:(NSString *)productId details:(NSDictionary *)details;
 ```
 
-This method will be called when the widget has successfully loaded the product info. A successful load means that the product is supported by Fit Analytics and the widget should be able to provide a size recommendation for it.
+This method will be called when the widget successfully loads the product info. A successful load means that the product is supported by Fit Analytics and the widget should be able to provide a size recommendation for it.
 
 &nbsp;
 
@@ -207,7 +207,7 @@ This method will be called when the widget has successfully loaded the product i
 - (void)webWidgetDidFailLoadingProduct:(FITAWebWidget *)widget productId:(NSString *)productId details:(NSDictionary *)details;
 ```
 
-This method will be called when widget failed to load the product info or the product is not supported.
+This method will be called when the widget fails to load the product info or the product is not supported.
 
 &nbsp;
 
@@ -215,7 +215,7 @@ This method will be called when widget failed to load the product info or the pr
 - (void)webWidgetDidOpen:(FITAWebWidget *)widget productId:(NSString *)productId;
 ```
 
-This method will be called when the widget has successfully opened after the `open` method call.
+This method will be called when the widget is successfully opened after the `open` method call.
 
 ## Configurable widget options
 
