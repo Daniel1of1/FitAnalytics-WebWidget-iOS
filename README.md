@@ -267,6 +267,27 @@ For the complete list of available widget options and their description, please 
 
 ---
 
+## Common pitfalls
+
+###Opening Fit Finder in background
+In some implementations, Fit Finder is opened in the background for every PDP in hidden mode. In those implementations, clicking the size help link unhides Fit Finder.
+Such an implementation should be avoided as it is inefficient for several reasons:
+1. It runs unnecessary Javascript code in the background for users who are not interested in size help, which means extra app resources are consumed for no reason.
+2. It sends additional requests to Fit Analytics servers resulting in wasted bandwidth, which is especially precious on mobile devices.
+
+Fortunately, the Fit Analytics API already provides support for efficient resources usage together with optimal loading time. Your code should indeed load the widget in the background, but not open it.
+
+A quick summary of the recommended process is below:
+1. There needs to be only a **single** instance of the widget that's running in the background.
+2. You can use the FITAWebWidget::reconfigure(productSerial,...) method to trigger widget reconfiguration when a new product is viewed by the user.
+3. Once you know that the product is supported, you can request the immediate recommendation (PDP-embedded recommendation) via FITAWebWidget::recommend(...) method.
+4. When a user navigates to another product you can reconfigure the widget with the new product info and call the FITAWebWidget::recommend(...) again.
+5. If the user wants to open the widget you can simply call FITAWebWidget::open(...) method and wait for FITAWebWidgetHandler::WebWidgetDidOpen(...) callback.
+
+A summary of the recommended steps can be found in this wiki:
+https://github.com/UPcload/FitAnalytics-WebWidget-iOS/wiki/Common-integration-process-notes
+
+
 ## Purchase reporting
 
 Purchase reporting usually means that when the user receives a confirmation of a successful purchases, namely, the user sees the Order Confirmation Page (a.k.a OCP or checkout page), the app will report all items in the order to Fit Analytics. The reporting is done by sending a simple HTTP request.
