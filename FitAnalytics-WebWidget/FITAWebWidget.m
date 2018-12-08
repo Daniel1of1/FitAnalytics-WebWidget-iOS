@@ -15,6 +15,7 @@ static NSString *const kWidgetURLString = @"https://widget.fitanalytics.com/widg
 
 // the custom protocol prefix
 static NSString *const kUriPrefix = @"fita:";
+static NSString *const kSidKey = @"com.fitanalytics.widget.sid";
 
 typedef void (^WidgetEventCallback)(FITAWebWidget *);
 typedef void (^WidgetMessageCallback)(id, NSError *);
@@ -27,8 +28,10 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
 @property (nonatomic, weak) id<FITAWebWidgetHandler> handler;
 @property BOOL isLoading;
 @property BOOL isLoaded;
+@property BOOL isDryRun;
 @property (nonatomic, strong) WidgetEventCallback onLoadCallback;
 @property (nonatomic, strong) WidgetMessageCallback onMessageSendCallback;
+@property (nonatomic, strong) NSUserDefaults *defaults;
 
 @end
 
@@ -48,8 +51,8 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
         _webView = webView;
         _webView.delegate = self;
         _handler = handler;
-        _isLoading = NO;
-        _isLoaded = NO;
+        [self initShared];
+        _defaults = [[NSUserDefaults alloc] init];
     }
 
     return self;
@@ -82,11 +85,20 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
             // NOOP
         };
         _handler = handler;
-        _isLoading = NO;
-        _isLoaded = NO;
+        [self initShared];
+        _defaults = [[NSUserDefaults alloc] init];
     }
 
     return self;
+}
+
+- (void)initShared
+{
+    _isLoading = NO;
+    _isLoaded = NO;
+
+    NSArray *arguments = [[NSProcessInfo processInfo] arguments];
+    _isDryRun = [arguments containsObject:@"com.fitanalytics.isDryRun"];
 }
 
 #pragma mark - JS-to-iOS communication -
@@ -140,6 +152,13 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
                 NSDictionary *details = nil;
                 if ([arguments count] > 1 && [[arguments objectAtIndex:1] isKindOfClass:[NSDictionary class]]) {
                     details = [arguments objectAtIndex:1];
+                    // persist the SID, if present
+                    if ([details isKindOfClass:[NSDictionary class]] && [[details objectForKey:@"sid"] isKindOfClass:[NSString class]]) {
+                        NSString *sid = [details objectForKey:@"sid"];
+                        if (sid != nil) {
+                            [_defaults setObject:sid forKey:kSidKey];
+                        }
+                    }
                 }
                 [self.handler webWidgetDidLoadProduct:self productId:productId details:details];
             } 
@@ -296,7 +315,8 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
 {
     NSDictionary *arguments;
     NSDictionary *defaultArguments = @{
-       @"open": @YES
+       @"open": @YES,
+       @"blockMetrics": @(_isDryRun)
     };
 
     if (productSerial) {
@@ -318,7 +338,7 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
 
 - (void)onFinishLoad
 {
-    self.isLoading = YES;
+    self.isLoading = NO;
     self.isLoaded = YES;
 
     if (self.onLoadCallback) {
@@ -349,7 +369,7 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
         self.isLoading = YES;
         NSURL *widgetURL = [NSURL URLWithString:kWidgetURLString];
         NSURLRequest *widgetURLRequest = [NSURLRequest requestWithURL:widgetURL];
-        [self.webView loadRequest:widgetURLRequest];
+
         if (_webView) {
             [self.webView loadRequest:widgetURLRequest];
         }
@@ -451,6 +471,11 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
 
 - (void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error
 {
+     // avoid the error -999 (see: https://discussions.apple.com/thread/1727260?answerId=8877452022#8877452022)
+     if (error.code == NSURLErrorCancelled) {
+         return;
+     }
+
     [self onLoadError:error];
 }
 
@@ -481,6 +506,11 @@ typedef void (^WidgetMessageCallback)(id, NSError *);
 }
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error
+{
+    [self onLoadError:error];
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error
 {
     [self onLoadError:error];
 }

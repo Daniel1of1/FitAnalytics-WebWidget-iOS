@@ -16,6 +16,8 @@ The SDK introduces a layer that imitates a web-based (JavaScript) integration of
 3. Exposing several methods that allow controlling the widget.  
 4. Defining the **FITAWebWidgetHandler** interface, which allows registering various callbacks (by implementing them as interface methods). These callbacks are invoked by the widget controller through various events (e.g. when a user closes the widget, when the widget displays a recommendation,   etc.).  
 
+Optionally, you can also include the purchase reporting for the order confirmantion page/view.
+
 ---
 
 ## Installation (using Cocoapods)
@@ -34,9 +36,37 @@ https://cocoapods.org/
 **Step 4.** Make sure you always open **Xcode Workspace** instead of Xcode Project. You can do it by
 using **open YourApp.xcworkspace** command in terminal.
 
+## Installation (using the universal binary framework)
+
+Alternatively you can use the pre-built universal binary framework. It's available for download with each release (since v0.4.2). 
+
+It comes in two build flavors: 
+   1) **all** - which includes binary code for both devices (arm7x, arm64) and simulators (i386, x86_64)
+   2) **device_only** - which includes just device-specific binaries (arm7x, arm64). The device-specific flavor is meant for final builds that are meant to be released in App store (which disallows the simulator binary code in apps).
+
+You can find the minimal example project that uses the binary framework in **UniversalFramework/Framework Example** subdirectory of the repository.
+
+**Step 1.** Download the framework package from the release page:
+
+Complete build: [FitAnalytics_WebWidget.framework-v0.4.2-all.tar.gz](https://github.com/UPcload/FitAnalytics-WebWidget-iOS/releases/download/v0.4.2/FitAnalytics_WebWidget.framework-v0.4.2-all.tar.gz)
+
+Device-only build: [FitAnalytics_WebWidget.framework-v0.4.2-device_only.tar.gz](https://github.com/UPcload/FitAnalytics-WebWidget-iOS/releases/download/v0.4.2/FitAnalytics_WebWidget.framework-v0.4.2-device_only.tar.gz)
+
+**Step 2.** Unpack the binary framework and add to the XCode project  via "Add files ..." context menu.
+
+**Step 3.** When including header files (see below) add them in the form
+```objc
+#import <FitAnalytics_WebWidget/FITAWebWidget.h>
+...
+```
+instead of 
+```objc
+#import "FITAWebWidget.h"
+...
+```
 ---
 
-## Integration Procedure
+## Widget integration Procedure
 
 We're presuming a simple app with the single main ViewController class.
 
@@ -78,6 +108,10 @@ Alternatively, you can initialize the widget controller with a WKWebView instanc
 ```objc
 self.widget = [[FITAWebWidget alloc] initWithWKWebView:self.wkWebView handler:self];
 ```
+
+<a name="wkwebview-warning"></a>__WARNING__
+
+**Since iOS 12.x update, when using WKWebView, all widget interactions are reliable only when the widget container WebView is connected to the view hierarchy. When the WebView is in a disconnected state (i.e. it has no superview) all HTTP requests inside it begin to fail/timeout silently. To avoid this issue, always keep the WebView connected in the hierarchy and hide it visually (by setting the `hidden` property and the frame dimensions to zero). We are still looking into a better solution and/or workaround.**
 
 ## Methods
 
@@ -229,4 +263,81 @@ This method will be called when the widget is successfully opened after the `ope
 
 `language` .. the language mutation of the shop (e.g. en, de, fr, es, it, etc.)
 
-For the complete list of available widget options and their description, please see http://developers.fitanalytics.com/documentation#list-callbacks-parameters
+For the complete list of available widget options and their description, please see https://developers.fitanalytics.com/documentation#list-callbacks-parameters
+
+---
+
+## Purchase reporting
+
+Purchase reporting usually means that when the user receives a confirmation of a successful purchases, namely, the user sees the Order Confirmation Page (a.k.a OCP or checkout page), the app will report all items in the order to Fit Analytics. The reporting is done by sending a simple HTTP request.
+
+The usual report is a collection of attributes such as the order ID, the product serial for each purchased item, purchased size, price, currency, etc.
+
+The most common attributes are:
+
+* **orderId** .. (required) unique identifier of the order
+* **userId** .. if the user is registered customer, their shop-specific ID
+* **productSerial** .. serial number/ID of the product (independent of purchased size!); it should match with the `productSerial` that was used for PDP size advisor.
+* **shopArticleCode** .. (optional) the size-specific identifier
+* **purchasedSize** .. the size code of the purchased size
+* **shopCountry** .. if the shop has country-specific versions, specify it via this attribute
+* **language** .. if your shop has language-specific versions, you can specify the language in which the purchase was made (which helps identify the user's sizing system)
+
+For the complete list of possible reported fields and their description, please see https://developers.fitanalytics.com/documentation#sales-data-exchange
+
+### Usage
+
+Import the **FITAPurchaseReport.h** and the **FITAPurchaseReporter.h** header file.
+ 
+```objc
+#import "FITAPurchaseReport.h"
+#import "FITAPurchaseReporter.h"
+```
+
+Create a new instance of the purchase reporter (**FITAPurchaseReporter**).
+
+```objc
+FITAPurchaseReporter *reporter = [[FITAPurchaseReporter alloc] init];
+```
+
+For each line item present in the customer's order, create a new instance of **FITAPurchaseReport** and send it via reporter.
+
+```objc
+FITAPurchaseReport *report = [[FITAPurchaseReport alloc] init];
+
+report.orderId = @"0034";
+report.userId = @"003242A32A";
+report.productSerial = @"test-55322214";
+report.purchasedSize = @"XXL";
+// add additional attributes, such as shopCountry, lanugage etc. here.
+
+[reporter sendReport:report];
+```
+
+Alternatively, you can initialize the report instance with a dictionary. That can be useful for setting shared defaults, for example.
+
+```objc
+
+NSDictionary *reportDefaults = @{
+  @"orderId": @"0034",
+  @"userId": @"003242A32A"
+};
+
+FITAPurchaseReporter *report = [[FITAPurchaseReport alloc] initWithDictionary:reportDefaults];
+
+report.productSerial = @"test-55322214";
+report.purchasedSize = @"XXL";
+
+[reporter sendReport:report];
+```
+
+If you wish to wait until reporting has finished, you can pass a callback function.
+
+```objc
+[reporter sendReport:report done:^(NSError *error) {
+  if (error != nil)
+    NSLog("ERROR: %@", error);
+  else
+    NSLog("SUCCESS");
+}]
+```

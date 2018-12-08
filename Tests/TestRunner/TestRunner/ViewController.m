@@ -31,24 +31,24 @@
 {
    [super viewDidLoad];
     
-    // we're using the app launch argument 'com.fitanalytics.useWKWebView' presence
-    // for selecting the WKWebView instead of UIWebView
+    // we're using the app launch argument 'com.fitanalytics.useUIWebView' presence
+    // for selecting the UIWebView instead of WKWebView
     NSArray *arguments = [[NSProcessInfo processInfo] arguments];
-    _useWKWebView = [arguments containsObject:@"com.fitanalytics.useWKWebView"];
+    _useUIWebView = [arguments containsObject:@"com.fitanalytics.useUIWebView"];
 
-    // clone frame from UIWebView
+    // clone frame from top view container
     CGRect frame = [self.view frame];
 
-    if (_useWKWebView) {
+    if (_useUIWebView) {
+        NSLog(@"using UIWebView");
+        self.uiWebView = [[UIWebView alloc] initWithFrame:frame];
+        [self.view addSubview:self.uiWebView];
+    }
+    else {
         NSLog(@"using WKWebView");
         // create the WKWebView instance
         self.wkWebView = [[WKWebView alloc] initWithFrame:frame];
         [self.view addSubview:self.wkWebView];
-    }
-    else {
-        NSLog(@"using UIWebView");
-        self.webView = [[UIWebView alloc] initWithFrame:frame];
-        [self.view addSubview:self.webView];
     }
 }
 
@@ -70,6 +70,14 @@
     }
 }
 
+- (void)webWidgetDidFailLoading:(FITAWebWidget *)widget withError:(NSError *)error
+{
+    if (initResolve) {
+        initResolve(error);
+        initResolve = nil;
+    }
+}
+
 - (void)webWidgetDidLoadProduct:(FITAWebWidget *)widget productId:(NSString *)productId details:(NSDictionary *)details
 {
     if (productLoadResolve) {
@@ -81,7 +89,9 @@
 - (void) webWidgetDidFailLoadingProduct:(FITAWebWidget *)widget productId:(NSString *)productId details:(NSDictionary *)details
 {
     if (productLoadResolve) {
-        productLoadResolve([NSError init]);
+        productLoadResolve([NSError errorWithDomain:@"fita" code:1001 userInfo:@{
+            NSLocalizedDescriptionKey: @"Failed loading the product"
+        }]);
         productLoadResolve = nil;
     }
 }
@@ -114,13 +124,33 @@
 
 - (FITAWebWidget *)initializeWidget
 {
-    if (_useWKWebView) {
-        self.widget = [[FITAWebWidget alloc] initWithWKWebView:self.wkWebView handler:self];
+    if (_useUIWebView) {
+        self.widget = [[FITAWebWidget alloc] initWithWebView:self.uiWebView handler:self];
     }
     else {
-        self.widget = [[FITAWebWidget alloc] initWithWebView:self.webView handler:self];
+        self.widget = [[FITAWebWidget alloc] initWithWKWebView:self.wkWebView handler:self];
     }
     return self.widget;
+}
+
+- (void)disconnectWebView
+{
+    if (_useUIWebView) {
+        [self.uiWebView removeFromSuperview];
+    }
+    else {
+        [self.wkWebView removeFromSuperview];
+    }
+}
+
+- (void)reconnectWebView
+{
+    if (_useUIWebView) {
+        [self.view addSubview:self.uiWebView];
+    }
+    else {
+        [self.view addSubview:self.wkWebView];
+    }
 }
 
 // for testing the messaging interface
@@ -138,7 +168,7 @@
 - (AnyPromise *)widgetLoad
 {
     ViewController *view = self;
-    AnyPromise *promise =  [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
+    AnyPromise *promise = [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
         view->readyResolve = resolve;
     }];
     [self.widget load];
@@ -148,9 +178,15 @@
 - (AnyPromise *)widgetCreate:(nullable NSString *)productSerial options:(nullable NSDictionary *)options
 {
     ViewController *view = self;
-    AnyPromise *promise = [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
-        view->productLoadResolve = resolve;
-    }];
+    AnyPromise *promise;
+
+    if (productSerial != nil) {
+        promise = [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
+            view->productLoadResolve = resolve;
+        }];
+    } else {
+        promise = [AnyPromise promiseWithValue: nil];
+    }
     [self.widget create:productSerial options:options];
     return promise;
 }
@@ -178,9 +214,15 @@
 - (AnyPromise *)widgetReconfigure:(nullable NSString *)productSerial options:(nullable NSDictionary *)options
 {
     ViewController *view = self;
-    AnyPromise *promise = [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
-        view->productLoadResolve = resolve;
-    }];
+    AnyPromise *promise;
+
+    if (productSerial != nil) {
+        promise = [AnyPromise promiseWithResolverBlock:^(PMKResolver resolve){
+            view->productLoadResolve = resolve;
+        }];
+    } else {
+        promise = [AnyPromise promiseWithValue: nil];
+    }
     [self.widget reconfigure:productSerial options:options];
     return promise;
 }
